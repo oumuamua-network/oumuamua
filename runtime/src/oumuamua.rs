@@ -1,15 +1,6 @@
-/// A runtime module template with necessary imports
-
-/// Feel free to remove or edit this file as needed.
-/// If you change the name of this file, make sure to update its references in runtime/src/lib.rs
-/// If you remove this file, you can remove those references
-
-
-/// For more guidance on Substrate modules, see the example module
-/// https://github.com/paritytech/substrate/blob/master/srml/example/src/lib.rs
-
 use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
 use system::ensure_signed;
+use assets::{Balance, AssetId}
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait {
@@ -17,6 +8,29 @@ pub trait Trait: system::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+}
+
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct BorrowOrder<Balance, AccountId, AssetId> {
+	id: u64,
+	owner: AccountId,
+	btotal: Balance,		// 借款总额
+	btokenId: AssetId,		// 借款币种
+	already: Balance,		// 已经借到
+	duration: u64,			// 借款时长
+	stotal: Balance,		// 抵押总额
+	stokenId: AssetId,		// 抵押币种
+	interest: u32,			// 年利率，万分之 x
+}
+
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct SupplyOrder<Balance, AccountId, AssetId> {
+	id: u64,
+	owner: AccountId,
+	total: Balance,
+	atokens:Vec<AssetId>,	// accept tokens
+	atokensAddress:
+
 }
 
 /// This module's storage items.
