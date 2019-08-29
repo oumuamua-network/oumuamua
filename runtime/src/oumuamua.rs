@@ -28,9 +28,11 @@ pub struct SupplyOrder<Balance, AccountId, AssetId> {
 	id: u64,
 	owner: AccountId,
 	total: Balance,
-	atokens:Vec<AssetId>,	// accept tokens
-	atokensAddress:
-
+	stoken: AssetId,		// 提供的资金种类（默认是 USDT）
+	tokens: Vec<AssetId>,	// 接受抵押的资金种类
+	amortgage: u32,			// 接受抵押率，万分之 x
+	duration: u64,			// 这部分资金的 free time
+	interest: u32,			// 接受最小的年利率，万分之 x
 }
 
 /// This module's storage items.
@@ -39,7 +41,11 @@ decl_storage! {
 		// Just a dummy storage item. 
 		// Here we are declaring a StorageValue, `Something` as a Option<u32>
 		// `get(something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
-		Something get(something): Option<u32>;
+		BorrowOrderAmount get(borrow_order_amount): u64;
+		BorrowOrderDetail get(borrow_order_detail): map u64 => BorrowOrder;
+		SupplyOrderAmount get(supply_order_amount): u64;
+		SupplyOrderDetail get(supply_order_detail): map u64 => SupplyOrder;
+		AllowAsset get(allow_asset): Vec<AssetId>;
 	}
 }
 
