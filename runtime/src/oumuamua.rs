@@ -1,15 +1,6 @@
-/// A runtime module template with necessary imports
-
-/// Feel free to remove or edit this file as needed.
-/// If you change the name of this file, make sure to update its references in runtime/src/lib.rs
-/// If you remove this file, you can remove those references
-
-
-/// For more guidance on Substrate modules, see the example module
-/// https://github.com/paritytech/substrate/blob/master/srml/example/src/lib.rs
-
 use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
 use system::ensure_signed;
+use assets::{Balance, AssetId}
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait {
@@ -19,13 +10,42 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct BorrowOrder<Balance, AccountId, AssetId> {
+	id: u64,
+	owner: AccountId,
+	btotal: Balance,		// 借款总额
+	btokenId: AssetId,		// 借款币种
+	already: Balance,		// 已经借到
+	duration: u64,			// 借款时长
+	stotal: Balance,		// 抵押总额
+	stokenId: AssetId,		// 抵押币种
+	interest: u32,			// 年利率，万分之 x
+}
+
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct SupplyOrder<Balance, AccountId, AssetId> {
+	id: u64,
+	owner: AccountId,
+	total: Balance,
+	stoken: AssetId,		// 提供的资金种类（默认是 USDT）
+	tokens: Vec<AssetId>,	// 接受抵押的资金种类
+	amortgage: u32,			// 接受抵押率，万分之 x
+	duration: u64,			// 这部分资金的 free time
+	interest: u32,			// 接受最小的年利率，万分之 x
+}
+
 /// This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as TemplateModule {
 		// Just a dummy storage item. 
 		// Here we are declaring a StorageValue, `Something` as a Option<u32>
 		// `get(something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
-		Something get(something): Option<u32>;
+		BorrowOrderAmount get(borrow_order_amount): u64;
+		BorrowOrderDetail get(borrow_order_detail): map u64 => BorrowOrder;
+		SupplyOrderAmount get(supply_order_amount): u64;
+		SupplyOrderDetail get(supply_order_detail): map u64 => SupplyOrder;
+		AllowAsset get(allow_asset): Vec<AssetId>;
 	}
 }
 
@@ -59,7 +79,7 @@ decl_event!(
 		// Just a dummy event.
 		// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
 		// To emit this event, we call the deposit funtion, from our runtime funtions
-		SomethingStored(u32, AccountId),
+		IssueBorrow(u64, AccountId, AssetId, Balance, AssetId, )
 	}
 );
 
