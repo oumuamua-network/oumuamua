@@ -79,7 +79,7 @@ decl_event!(
 		// Just a dummy event.
 		// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
 		// To emit this event, we call the deposit funtion, from our runtime funtions
-		SomethingStored(u32, AccountId),
+		IssueBorrow(u64, AccountId, AssetId, Balance, AssetId, )
 	}
 );
 
