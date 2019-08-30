@@ -1,12 +1,12 @@
 use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
 use system::ensure_signed;
-use assets::{Balance, AssetId}
+use assets::{Balance, AssetId};
 
-/// The module's configuration trait.
+// The module's configuration trait.
 pub trait Trait: system::Trait {
 	// TODO: Add other types and constants required configure this module.
 
-	/// The overarching event type.
+	// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
@@ -35,7 +35,7 @@ pub struct SupplyOrder<Balance, AccountId, AssetId> {
 	interest: u32,			// 接受最小的年利率，万分之 x
 }
 
-/// This module's storage items.
+// This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as TemplateModule {
 		// Just a dummy storage item. 
@@ -79,7 +79,7 @@ decl_event!(
 		// Just a dummy event.
 		// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
 		// To emit this event, we call the deposit funtion, from our runtime funtions
-		IssueBorrow(u64, AccountId, AssetId, Balance, AssetId, )
+		IssueBorrow(u64, AccountId, AssetId, Balance, u64, AssetId, Balance, u32),
 	}
 );
 
