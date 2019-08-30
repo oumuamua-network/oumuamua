@@ -1,6 +1,7 @@
 use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
 use system::ensure_signed;
 use assets::{Balance, AssetId};
+use treasury::{
 
 // The module's configuration trait.
 pub trait Trait: system::Trait {
