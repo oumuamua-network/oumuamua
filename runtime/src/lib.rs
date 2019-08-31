@@ -1,7 +1,6 @@
 //! The Substrate Node oumuamua runtime. This can be compiled with `#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
@@ -189,7 +188,8 @@ impl sudo::Trait for Runtime {
 
 /// Used for the module oumuamua in `./oumuamua.rs`
 impl oumuamua::Trait for Runtime {
-	type Event = Event;
+    type Event = Event;
+    type AssetId = u32;
 }
 
 construct_runtime!(
