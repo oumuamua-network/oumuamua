@@ -115,5 +115,8 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
+		token: Some(TokenConfig {
+			admin: account_key("Alice"),
+		}),
 	}
 }
