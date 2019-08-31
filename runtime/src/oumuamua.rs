@@ -71,6 +71,7 @@ decl_event!(
         <T as system::Trait>::Hash,
         <T as balances::Trait>::Balance,
         <T as system::Trait>::BlockNumber
+
     {
         Created(AccountId, Hash),
         PriceSet(AccountId, Hash, Balance),
@@ -80,7 +81,7 @@ decl_event!(
         Bid(Hash, Balance, AccountId),
         AuctionFinalized(Hash, Balance, BlockNumber),
 
-        CreateBorrow(AccountId, Balance
+        CreateBorrow(AccountId, Balance,  u64, Balance, u32),
     }
 );
 
@@ -374,6 +375,9 @@ decl_module! {
 
                 <BidAccounts<T>>::remove(auction.kitty_id);
             }
+        }
+
+        fn create_borrow_order(){
         }
     }
 }
