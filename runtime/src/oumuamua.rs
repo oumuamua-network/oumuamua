@@ -1,11 +1,16 @@
-use support::{decl_storage, decl_module, StorageValue, StorageMap, Parameter,
-    dispatch::Result, ensure, decl_event, traits::{Currency, ReservableCurrency}};
-use system::ensure_signed;
-use runtime_primitives::traits::{As, Hash, Zero};
-use parity_codec::{Encode, Decode};
+use parity_codec::{Decode, Encode};
 use rstd::cmp;
 use rstd::prelude::*;
 use runtime_primitives::traits::SimpleArithmetic;
+use runtime_primitives::traits::{As, Hash, Zero};
+use support::{
+    decl_event, decl_module, decl_storage,
+    dispatch::Result,
+    ensure,
+    traits::{Currency, ReservableCurrency},
+    Parameter, StorageMap, StorageValue,
+};
+use system::ensure_signed;
 //use assets::*;
 //use  treasury::*;
 
@@ -23,15 +28,14 @@ pub struct Kitty<Hash, Balance> {
 pub struct BorrowOrder<Balance, AccountId, AssetId, Hash> {
     id: Hash,
     owner: AccountId,
-    btotal: Balance,		// 借款总额
-    btoken_id: AssetId,		// 借款币种
-    already: Balance,		// 已经借到
-    duration: u64,		// 借款时长
-    stotal: Balance,		// 抵押总额
-    stoken_id: AssetId,		// 抵押币种
-    interest: u32,		// 年利率，万分之 x
+    btotal: Balance,    // 借款总额
+    btoken_id: AssetId, // 借款币种
+    already: Balance,   // 已经借到
+    duration: u64,      // 借款时长
+    stotal: Balance,    // 抵押总额
+    stoken_id: AssetId, // 抵押币种
+    interest: u32,      // 年利率，万分之 x
 }
-
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -39,11 +43,11 @@ pub struct SupplyOrder<Balance, AccountId, AssetId, Hash> {
     id: Hash,
     owner: AccountId,
     total: Balance,
-    stoken: AssetId,		// 提供的资金种类（默认是 USDT）
-    tokens: Vec<AssetId>,	// 接受抵押的资金种类
-    amortgage: u32,		// 接受抵押率，万分之 x
-    duration: u64,		// 这部分资金的 free time
-    interest: u32,		// 接受最小的年利率，万分之 x
+    stoken: AssetId,      // 提供的资金种类（默认是 USDT）
+    tokens: Vec<AssetId>, // 接受抵押的资金种类
+    amortgage: u32,       // 接受抵押率，万分之 x
+    duration: u64,        // 这部分资金的 free time
+    interest: u32,        // 接受最小的年利率，万分之 x
 }
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
@@ -82,6 +86,12 @@ decl_event!(
         AuctionFinalized(Hash, Balance, BlockNumber),
 
         CreateBorrow(AccountId, Balance,  u64, Balance, u32),
+        CancelBorrow(AccountId, Hash),
+        TakeBorrow(AccountId),
+        CreateSupply(AccountId),
+        CancelSupply(AccountId, Hash),
+        TakeSupply(AccountId),
+            
     }
 );
 
@@ -106,22 +116,22 @@ decl_storage! {
 
         Nonce: u64;
 
-        
-	BorrowOrderDetail get(borrow_order_detail): map T::Hash => BorrowOrder<T::Balance, T::AccountId, T::AssetId, T::Hash>;
+
+    BorrowOrderDetail get(borrow_order_detail): map T::Hash => BorrowOrder<T::Balance, T::AccountId, T::AssetId, T::Hash>;
         BorrowOrderOwner get(owner_of_borrow): map T::Hash => Option<T::AccountId>;
-        
+
         AllBorrowOrder get(borrow_by_index): map u64 => T::Hash;
-	AllBorrowOrderCount get(borrow_order_count): u64;
+    AllBorrowOrderCount get(borrow_order_count): u64;
         AllBorrowOrderIndex: map T::Hash => u64;
 
         OwnedBorrowOrder get(borrow_of_owner_by_index): map(T::AccountId, u64) => T::Hash;
         OwnedBorrowCount get(owned_borrow_count): map T::AccountId => u64;
         OwnedBorrowIndex: map T::Hash => u64;
 
-	SupplyOrderDetail get(supply_order_detail): map T::Hash => SupplyOrder<T::Balance, T::AccountId, T::AssetId, T::Hash>;
+    SupplyOrderDetail get(supply_order_detail): map T::Hash => SupplyOrder<T::Balance, T::AccountId, T::AssetId, T::Hash>;
         SupplyOrderOwner get(owner_of_supply): map T::Hash => Option<T::AccountId>;
-        
-	AllSupplyOrder get(supply_by_index): map u64 => T::Hash;
+
+    AllSupplyOrder get(supply_by_index): map u64 => T::Hash;
         AllSupplyOrderCount get(supply_order_count): u64;
         AllSupplyOrderIndex: map T::Hash => u64;
 
@@ -129,15 +139,13 @@ decl_storage! {
         OwnedSupplyCount get(owned_supply_count): map T::AccountId => u64;
         OwnedSupplyIndex: map T::Hash => u64;
 
-        
 
-	AllowAssets get(allow_asset): Vec<T::AssetId>;
 
-        
+    AllowAssets get(allow_asset): Vec<T::AssetId>;
+
+
     }
 }
-
-
 
 decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -388,12 +396,14 @@ impl<T: Trait> Module<T> {
 
         let owned_kitty_count = Self::owned_kitty_count(&to);
 
-        let new_owned_kitty_count = owned_kitty_count.checked_add(1)
+        let new_owned_kitty_count = owned_kitty_count
+            .checked_add(1)
             .ok_or("Overflow adding a new kitty to account balance")?;
 
         let all_kitties_count = Self::all_kitties_count();
 
-        let new_all_kitties_count = all_kitties_count.checked_add(1)
+        let new_all_kitties_count = all_kitties_count
+            .checked_add(1)
             .ok_or("Overflow adding a new kitty to total supply")?;
 
         <Kitties<T>>::insert(kitty_id, new_kitty);
@@ -417,20 +427,26 @@ impl<T: Trait> Module<T> {
 
         ensure!(owner == from, "'from' account does not own this kitty");
 
-        ensure!(!<KittyAuction<T>>::exists(kitty_id), "This kitty has an open auction.");
+        ensure!(
+            !<KittyAuction<T>>::exists(kitty_id),
+            "This kitty has an open auction."
+        );
 
         let owned_kitty_count_from = Self::owned_kitty_count(&from);
         let owned_kitty_count_to = Self::owned_kitty_count(&to);
 
-        let new_owned_kitty_count_to = owned_kitty_count_to.checked_add(1)
+        let new_owned_kitty_count_to = owned_kitty_count_to
+            .checked_add(1)
             .ok_or("Transfer causes overflow of 'to' kitty balance")?;
 
-        let new_owned_kitty_count_from = owned_kitty_count_from.checked_sub(1)
+        let new_owned_kitty_count_from = owned_kitty_count_from
+            .checked_sub(1)
             .ok_or("Transfer causes underflow of 'from' kitty balance")?;
 
         let kitty_index = <OwnedKittiesIndex<T>>::get(kitty_id);
         if kitty_index != new_owned_kitty_count_from {
-            let last_kitty_id = <OwnedKittiesArray<T>>::get((from.clone(), new_owned_kitty_count_from));
+            let last_kitty_id =
+                <OwnedKittiesArray<T>>::get((from.clone(), new_owned_kitty_count_from));
             <OwnedKittiesArray<T>>::insert((from.clone(), kitty_index), last_kitty_id);
             <OwnedKittiesIndex<T>>::insert(last_kitty_id, kitty_index);
         }
