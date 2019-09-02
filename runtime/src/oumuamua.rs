@@ -100,11 +100,9 @@ decl_storage! {
         OwnedSupplyCount get(owned_supply_count): map T::AccountId => u64;
         OwnedSupplyIndex: map T::Hash => u64;
 
-
-
         AllowAssets get(allow_asset): Vec<T::AssetId>;
 
-
+        Nonce: u64;       
     }
 }
 
@@ -113,8 +111,28 @@ decl_module! {
 
         fn deposit_event<T>() = default;
 
+        fn create_borrow(origin, btotal: T::Balance, btokenid: T::AssetId, duration: u64, stotal: T::Balance,
+                         stokenid: T::AssetId, interest: u32) -> Result {
+            let sender = ensure_signed(origin)?;
+
+
+            
+            Ok(())
+        }
+         
+
+        fn cancel_borrow(orderid: T::Hash) ->Result {
+
+
+            Ok(())
+
+        }
+
+
         
 
+
+        
     }
 }
 
