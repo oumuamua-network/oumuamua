@@ -54,18 +54,8 @@ decl_event!(
     where
         <T as system::Trait>::AccountId,
         <T as system::Trait>::Hash,
-        <T as balances::Trait>::Balance,
-        <T as system::Trait>::BlockNumber
-
+        <T as balances::Trait>::Balance
     {
-        Created(AccountId, Hash),
-        PriceSet(AccountId, Hash, Balance),
-        Transferred(AccountId, AccountId, Hash),
-        Bought(AccountId, AccountId, Hash, Balance),
-        AuctionCreated(Hash, Balance, BlockNumber),
-        Bid(Hash, Balance, AccountId),
-        AuctionFinalized(Hash, Balance, BlockNumber),
-
         CreateBorrow(AccountId, Balance,  u64, Balance, u32),
         CancelBorrow(AccountId, Hash),
         TakeBorrow(AccountId),
