@@ -1,8 +1,10 @@
 use parity_codec::{Decode, Encode};
 use rstd::cmp;
 use rstd::prelude::*;
-use runtime_primitives::traits::SimpleArithmetic;
-use runtime_primitives::traits::{As, Hash, Zero};
+// use runtime_primitives::traits::SimpleArithmetic;
+use runtime_primitives::traits::{As, CheckedAdd, CheckedSub, Member, SimpleArithmetic, Hash, Zero};
+
+// use runtime_primitives::traits::{As};
 use support::{
     decl_event, decl_module, decl_storage,
     dispatch::Result,
@@ -46,6 +48,7 @@ pub struct SupplyOrder<Balance, AccountId, AssetId, Hash> {
 pub trait Trait: balances::Trait {
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
     type AssetId: Parameter + SimpleArithmetic + Default + Copy;
+    // type Balance: Member + Parameter + SimpleArithmetic + Default + Copy;
 }
 
 
