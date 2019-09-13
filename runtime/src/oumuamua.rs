@@ -82,6 +82,9 @@ decl_event!(
         Transfer(AssetId, AccountId, AccountId, TokenBalance),
         Approval(AssetId, AccountId, AccountId, TokenBalance),
 
+        Reserve(AssetId, AccountId, TokenBalance),
+        UnReserve(AssetId, AccountId, TokenBalance),
+
     }
 );
 
@@ -117,6 +120,9 @@ decl_storage! {
         TokenId get(token_id) config(): T::AssetId;
         Tokens get(token_details): map T::AssetId => Erc20Token<T::TokenBalance>;
         BalanceOf get(balance_of): map (T::AssetId, T::AccountId) => T::TokenBalance;
+        FreeBalanceOf get(free_balance_of): map (T::AssetId, T::AccountId) => T::TokenBalance;
+        ReserveBalanceOf get(reserve_balance_of): map(T::AssetId, T::AccountId) => T::TokenBalance;
+
         Allowance get(allowance): map (T::AssetId, T::AccountId, T::AccountId) => T::TokenBalance;
 
         Admin get(admin) config(): T::AccountId;
@@ -140,7 +146,6 @@ decl_module! {
 
             <TokenId<T>>::mutate(|id| *id += One::one());
 
-
             let token = Erc20Token {
                 name,
                 ticker,
@@ -149,6 +154,8 @@ decl_module! {
 
             <Tokens<T>>::insert(token_id, token);
             <BalanceOf<T>>::insert((token_id, sender), total_supply);
+            <FreeBalanceOf<T>>::insert((token_id, sender), total_supply);
+            <ReserveBalanceOf<T>>::insert((token_id, sender), T::TokenBalance::from(0));
 
             Ok(())
         }
@@ -188,6 +195,7 @@ decl_module! {
             Self::_transfer(token_id, from, to, value)
         }
 
+
         fn create_borrow(origin, btotal: T::TokenBalance, btokenid: T::AssetId, duration: u64, stotal: T::TokenBalance,
                          stokenid: T::AssetId, interest: u32) -> Result {
             let sender = ensure_signed(origin)?;
@@ -223,24 +231,103 @@ impl<T: Trait> Module<T> {
             <BalanceOf<T>>::exists((token_id, from.clone())),
             "Account does not own this token"
         );
+
         let sender_balance = Self::balance_of((token_id, from.clone()));
         ensure!(sender_balance >= value, "Not enough balance.");
+
+        let sender_free_balance = Self::free_balance_of((token_id, from.clone()));
+        ensure!(sender_free_balance >= value, "Not enough free balance.");
 
         let updated_from_balance = sender_balance
             .checked_sub(&value)
             .ok_or("overflow in calculating balance")?;
+
+        let updated_from_free_balance = sender_free_balance
+            .checked_sub(&value)
+            .ok_or("overflow in calculating free balance")?;
+
         let receiver_balance = Self::balance_of((token_id, to.clone()));
+
+        let receiver_free_balance = Self::free_balance_of((token_id, to.clone()));
+
         let updated_to_balance = receiver_balance
             .checked_add(&value)
             .ok_or("overflow in calculating balance")?;
 
+        let updated_to_free_balance = receiver_free_balance
+            .checked_add(&value)
+            .ok_or("overflow in calculating free balance")?;
+
         // reduce sender's balance
         <BalanceOf<T>>::insert((token_id, from.clone()), updated_from_balance);
+        <FreeBalanceOf<T>>::insert((token_id, from.clone()), updated_from_free_balance);
 
         // increase receiver's balance
         <BalanceOf<T>>::insert((token_id, to.clone()), updated_to_balance);
+        <FreeBalanceOf<T>>::insert((token_id, to.clone()), updated_to_free_balance);
 
         Self::deposit_event(RawEvent::Transfer(token_id, from, to, value));
+        Ok(())
+    }
+
+    fn _reserve(
+        token_id: T::AssetId,
+        sender: T::AccountId, 
+        value: T::TokenBalance,
+    ) -> Result {
+        ensure!(
+            <BalanceOf<T>>::exists((token_id, sender.clone())),
+            "Account does not own this token"
+        );
+
+        let sender_free_balance = Self::free_balance_of((token_id, sender.clone()));
+        ensure!(sender_free_balance >= value, "Not enough free balance.");
+
+        let sender_reserve_balance = Self::reserve_balance_of((token_id, sender.clone()));
+
+        let updated_sender_free_balance = sender_free_balance
+            .checked_sub(&value)
+            .ok_or("overflow in calculating reserve free balance")?;
+
+        let updated_sender_reserve_balance = sender_reserve_balance
+            .checked_add(&value)
+            .ok_or("overflow in calculating reserve reserve balance")?;
+
+        <FreeBalanceOf<T>>::insert((token_id, sender.clone()), updated_sender_free_balance);
+        <ReserveBalanceOf<T>>::insert((token_id, sender.clone()), updated_sender_reserve_balance);
+
+        Self::deposit_event(RawEvent::Reserve(token_id, sender, value));
+        Ok(())
+
+    }
+
+    fn _unreserve(
+        token_id: T::AssetId,
+        sender: T::AccountId, 
+        value: T::TokenBalance,
+    ) -> Result {
+        ensure!(
+            <BalanceOf<T>>::exists((token_id, sender.clone())),
+            "Account does not own this token"
+        );
+
+        let sender_free_balance = Self::free_balance_of((token_id, sender.clone()));
+
+        let sender_reserve_balance = Self::reserve_balance_of((token_id, sender.clone()));
+        ensure!(sender_reserve_balance >= value, "Not enough reserve balance.");
+
+        let updated_sender_free_balance = sender_free_balance
+            .checked_add(&value)
+            .ok_or("overflow in calculating unreserve free balance")?;
+
+        let updated_sender_reserve_balance = sender_reserve_balance
+            .checked_sub(&value)
+            .ok_or("overflow in calculating unreserve reserve balance")?;
+
+        <FreeBalanceOf<T>>::insert((token_id, sender.clone()), updated_sender_free_balance);
+        <ReserveBalanceOf<T>>::insert((token_id, sender.clone()), updated_sender_reserve_balance);
+
+        Self::deposit_event(RawEvent::UnReserve(token_id, sender, value));
         Ok(())
     }
 }
