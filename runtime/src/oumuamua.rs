@@ -12,7 +12,7 @@ use support::{
 use system::{self, ensure_signed};
 use runtime_primitives::traits::One;
 
-
+const yiwan: u64 = 10000;
 
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
@@ -127,6 +127,10 @@ decl_storage! {
         Allowance get(allowance): map (T::AssetId, T::AccountId, T::AccountId) => T::TokenBalance;
 
         Admin get(admin) config(): T::AccountId;
+
+// 本来这里应该是通过一个 Oracle 来获取价格。为了简便，直接用数据保存了。初始化时，设置 token_id 为 1 的是 USDT，
+// TokenPrice 表示 每单元该币种 能兑换 TokenPrice/10000 的 USDT。
+        TokenPrice get(token_price): map T::AssetId => u64;
     }
 }
 
@@ -157,6 +161,18 @@ decl_module! {
             <BalanceOf<T>>::insert((token_id, sender.clone()), total_supply);
             <FreeBalanceOf<T>>::insert((token_id, sender.clone()), total_supply);
             <ReserveBalanceOf<T>>::insert((token_id, sender.clone()), T::TokenBalance::from(0u64));
+
+            Ok(())
+        }
+
+        fn set_price(origin, token_id: T::AssetId, price: u64) -> Result {
+            let sender = ensure_signed(origin)?;
+
+            ensure!(sender == Self::admin(), "only Admin can set a token price");
+
+            ensure!(<Tokens<T>>::exists(token_id), "the token does not exist");
+
+            <TokenPrice<T>>::insert(token_id, price);
 
             Ok(())
         }
@@ -201,8 +217,70 @@ decl_module! {
                          stokenid: T::AssetId, interest: u32) -> Result {
             let sender = ensure_signed(origin)?;
 
-            //ensure(<TokenBalance)
+            ensure!(
+                <BalanceOf<T>>::exists((stokenid, sender.clone())),
+                "Account does not own this token"
+            );
 
+            ensure!(<Tokens<T>>::exists(btokenid), "the btoken does not exist");
+
+            ensure!(<TokenPrice<T>>::exists(btokenid), "the btoken price does not exist");
+            ensure!(<TokenPrice<T>>::exists(stokenid), "the stoken price does not exist");
+
+            let bprice = Self::token_price(btokenid);
+            // todo: need checked_mul
+            let btotalprice = btotal * T::TokenBalance::from(bprice);
+
+            let sprice = Self::token_price(stokenid);
+            // todo: need checked_mul
+            let stotalprice = stotal * T::TokenBalance::from(sprice);
+
+            ensure!(stotalprice >= btotalprice, "the value of supply lower than borrow"); // 等额或超额抵押，还没考虑手续费。
+
+            let nonce = <Nonce<T>>::get();
+            let random_hash = (<system::Module<T>>::random_seed(), &sender, nonce)
+                .using_encoded(<T as system::Trait>::Hashing::hash);
+
+            Self::_reserve(stokenid, sender.clone(), stotal);
+
+            ensure!(!<BorrowOrderOwner<T>>::exists(random_hash), "Borrow order already exists");
+
+            let new_borrow_order = BorrowOrder {
+                id: random_hash,
+                owner: sender.clone(),
+                btotal: btotal,
+                btoken_id: btokenid,
+                already: T::TokenBalance::from(0u64),
+                duration: duration,
+                stotal: stotal,
+                stoken_id: stokenid,
+                interest: interest
+            };
+
+            let owned_borrow_count = Self::owned_borrow_count(&sender);
+            let new_owned_borrow_count = owned_borrow_count.checked_add(1)
+                .ok_or("Overflow add a new borrow order to acount")?;
+
+            let all_borrow_order_count = Self::borrow_order_count();
+            let new_all_borrow_order_count = all_borrow_order_count.checked_add(1)
+                .ok_or("Overflow adding a new borrow order")?;
+
+            <BorrowOrderDetail<T>>::insert(random_hash, new_borrow_order);
+            <BorrowOrderOwner<T>>::insert(random_hash, &sender);
+
+            <AllBorrowOrder<T>>::insert(all_borrow_order_count, random_hash);
+           // <AllBorrowOrderCount<T>>::insert(new_all_borrow_order_count);
+            <AllBorrowOrderIndex<T>>::insert(random_hash, all_borrow_order_count);
+
+            <OwnedBorrowOrder<T>>::insert((sender.clone(), owned_borrow_count), random_hash);
+            <OwnedBorrowCount<T>>::insert(&sender, new_owned_borrow_count);
+            <OwnedBorrowIndex<T>>::insert(random_hash, owned_borrow_count);
+
+
+            <Nonce<T>>::mutate(|n| *n += 1);
+
+            Self::deposit_event(RawEvent::CreateBorrow(sender, btotal, duration, stotal, interest));
+            
             Ok(())
         }
 
