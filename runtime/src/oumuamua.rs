@@ -1,7 +1,10 @@
-use parity_codec::{Codec,Decode, Encode};
+use parity_codec::{Codec, Decode, Encode};
 use rstd::cmp;
 use rstd::prelude::*;
-use runtime_primitives::traits::{As, Hash, CheckedAdd, CheckedSub, Member, SimpleArithmetic, Zero};
+use runtime_primitives::traits::One;
+use runtime_primitives::traits::{
+    As, CheckedAdd, CheckedSub, Hash, Member, SimpleArithmetic, Zero,
+};
 use support::{
     decl_event, decl_module, decl_storage,
     dispatch::Result,
@@ -10,23 +13,21 @@ use support::{
     Parameter, StorageMap, StorageValue,
 };
 use system::{self, ensure_signed};
-use runtime_primitives::traits::One;
 
 const yiwan: u64 = 10000;
-
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct BorrowOrder<TokenBalance, AccountId, AssetId, Hash> {
     id: Hash,
     owner: AccountId,
-    btotal: TokenBalance,    // 借款总额
-    btoken_id: AssetId, // 借款币种
-    already: TokenBalance,   // 已经借到
-    duration: u64,      // 借款时长
-    stotal: TokenBalance,    // 抵押总额
-    stoken_id: AssetId, // 抵押币种
-    interest: u32,      // 年利率，万分之 x
+    btotal: TokenBalance,  // 借款总额
+    btoken_id: AssetId,    // 借款币种
+    already: TokenBalance, // 已经借到
+    duration: u64,         // 借款时长
+    stotal: TokenBalance,  // 抵押总额
+    stoken_id: AssetId,    // 抵押币种
+    interest: u32,         // 年利率，万分之 x
 }
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
@@ -41,7 +42,6 @@ pub struct SupplyOrder<TokenBalance, AccountId, AssetId, Hash> {
     duration: u64,        // 这部分资金的 free time
     interest: u32,        // 接受最小的年利率，万分之 x
 }
-
 
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
 pub struct Erc20Token<U> {
@@ -64,7 +64,6 @@ pub trait Trait: system::Trait {
         + From<u64>;
 }
 
-
 decl_event!(
     pub enum Event<T>
     where
@@ -82,6 +81,8 @@ decl_event!(
 
         Transfer(AssetId, AccountId, AccountId, TokenBalance),
         Approval(AssetId, AccountId, AccountId, TokenBalance),
+		Issue(AssetId, AccountId, TokenBalance),
+		Destroyed(AssetId, AccountId, TokenBalance),
 
         Reserve(AssetId, AccountId, TokenBalance),
         UnReserve(AssetId, AccountId, TokenBalance),
@@ -163,6 +164,68 @@ decl_module! {
             <ReserveBalanceOf<T>>::insert((token_id, sender.clone()), T::TokenBalance::from(0u64));
 
             Ok(())
+        }
+
+    fn issue(origin, token_id: T::AssetId, added: T::TokenBalance) {
+        let origin = ensure_signed(origin)?;
+
+            ensure!(<Tokens<T>>::exists(token_id), "the token does not exist");
+            ensure!(origin == Self::admin(), "only Admin can issue a token");
+
+            let admin_balance = Self::balance_of((token_id, origin.clone()));
+            let admin_free_balance = Self::free_balance_of((token_id, origin.clone()));
+            let total = Self::token_details(token_id).total_supply;
+
+            let admin_balance = admin_balance.checked_add(&added)
+                .ok_or("overflow in calculating admin balance")?;
+            let admin_free_balance = admin_free_balance.checked_add(&added)
+                .ok_or("overflow in calculating admin free balance")?;
+            let total = total.checked_add(&added)
+                .ok_or("overflow in calculating total supply")?;
+
+            let token = Erc20Token {
+                name: Self::token_details(token_id).name,
+                ticker: Self::token_details(token_id).ticker,
+                total_supply: total,
+            };
+
+        <BalanceOf<T>>::insert((token_id, origin.clone()), admin_balance);
+            <FreeBalanceOf<T>>::insert((token_id, origin.clone()), admin_free_balance);
+        <Tokens<T>>::insert(token_id, token);
+
+        Self::deposit_event(RawEvent::Issue(token_id, origin, total));
+    }
+
+        fn destroy(origin, token_id: T::AssetId, burned: T::TokenBalance) {
+            let origin = ensure_signed(origin)?;
+            ensure!(<Tokens<T>>::exists(token_id), "the token does not exist");
+            ensure!(origin == Self::admin(), "only Admin can new a token");
+
+            let free_balance = Self::free_balance_of((token_id, origin.clone()));
+            ensure!(free_balance >= burned, "origin free balance less than burned");
+
+            let free_balance = free_balance.checked_sub(&burned)
+                .ok_or("overflow in calculating free burn")?;
+
+            let balance = Self::balance_of((token_id, origin.clone()));
+            let balance = balance.checked_sub(&burned)
+                .ok_or("overflow in calculting balance burn")?;
+
+            let total = Self::token_details(token_id).total_supply;
+            let total = total.checked_sub(&burned)
+                .ok_or("overflow in calculating total supply")?;
+
+            let token = Erc20Token {
+                name: Self::token_details(token_id).name,
+                ticker: Self::token_details(token_id).ticker,
+                total_supply: total,
+            };
+
+            <BalanceOf<T>>::insert((token_id, origin.clone()), balance);
+            <FreeBalanceOf<T>>::insert((token_id, origin.clone()), free_balance);
+            <Tokens<T>>::insert(token_id, token);
+
+            Self::deposit_event(RawEvent::Destroyed(token_id, origin, burned));
         }
 
         fn set_price(origin, token_id: T::AssetId, price: u64) -> Result {
@@ -366,7 +429,7 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-     // the ERC20 standard transfer function
+    // the ERC20 standard transfer function
     // internal
     fn _transfer(
         token_id: T::AssetId,
@@ -417,11 +480,7 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    fn _reserve(
-        token_id: T::AssetId,
-        sender: T::AccountId, 
-        value: T::TokenBalance,
-    ) -> Result {
+    fn _reserve(token_id: T::AssetId, sender: T::AccountId, value: T::TokenBalance) -> Result {
         ensure!(
             <BalanceOf<T>>::exists((token_id, sender.clone())),
             "Account does not own this token"
@@ -445,14 +504,9 @@ impl<T: Trait> Module<T> {
 
         Self::deposit_event(RawEvent::Reserve(token_id, sender, value));
         Ok(())
-
     }
 
-    fn _unreserve(
-        token_id: T::AssetId,
-        sender: T::AccountId, 
-        value: T::TokenBalance,
-    ) -> Result {
+    fn _unreserve(token_id: T::AssetId, sender: T::AccountId, value: T::TokenBalance) -> Result {
         ensure!(
             <BalanceOf<T>>::exists((token_id, sender.clone())),
             "Account does not own this token"
@@ -461,7 +515,10 @@ impl<T: Trait> Module<T> {
         let sender_free_balance = Self::free_balance_of((token_id, sender.clone()));
 
         let sender_reserve_balance = Self::reserve_balance_of((token_id, sender.clone()));
-        ensure!(sender_reserve_balance >= value, "Not enough reserve balance.");
+        ensure!(
+            sender_reserve_balance >= value,
+            "Not enough reserve balance."
+        );
 
         let updated_sender_free_balance = sender_free_balance
             .checked_add(&value)
