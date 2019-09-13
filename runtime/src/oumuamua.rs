@@ -60,7 +60,8 @@ pub trait Trait: system::Trait {
         + Default
         + Copy
         + As<usize>
-        + As<u64>;
+        + As<u64>
+        + From<u64>;
 }
 
 
@@ -153,9 +154,9 @@ decl_module! {
             };
 
             <Tokens<T>>::insert(token_id, token);
-            <BalanceOf<T>>::insert((token_id, sender), total_supply);
-            <FreeBalanceOf<T>>::insert((token_id, sender), total_supply);
-            <ReserveBalanceOf<T>>::insert((token_id, sender), T::TokenBalance::from(0));
+            <BalanceOf<T>>::insert((token_id, sender.clone()), total_supply);
+            <FreeBalanceOf<T>>::insert((token_id, sender.clone()), total_supply);
+            <ReserveBalanceOf<T>>::insert((token_id, sender.clone()), T::TokenBalance::from(0u64));
 
             Ok(())
         }
