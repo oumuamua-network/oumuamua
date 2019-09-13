@@ -59,7 +59,6 @@ pub type Nonce = u64;
 /// Used for the module oumuamua in `./oumuamua.rs`
 mod oumuamua;
 
-mod token;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -200,10 +199,6 @@ impl oumuamua::Trait for Runtime {
     type AssetId = u32;
 }
 
-impl token::Trait for Runtime {
-    type Event = Event;
-    type TokenBalance = u64;
-}
 
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, AuthorityId, AuthoritySignature>) where
@@ -219,8 +214,7 @@ construct_runtime!(
 		Balances: balances,
 		Sudo: sudo,
 		// Used for the module oumuamua in `./oumuamua.rs`
-		OumuamuaModule: oumuamua::{Module, Call, Storage, Event<T>},
-		Token: token::{Module, Call, Storage, Event<T>, Config<T>},
+		OumuamuaModule: oumuamua::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 

@@ -1,7 +1,7 @@
 use primitives::{ed25519, sr25519, Pair};
 use project_runtime::{
 	AccountId, GenesisConfig, ConsensusConfig, TimestampConfig, BalancesConfig,
-	SudoConfig, IndicesConfig,
+	SudoConfig, IndicesConfig, OumuamuaModuleConfig,
 };
 use substrate_service;
 
@@ -115,8 +115,9 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
-		token: Some(TokenConfig {
-			admin: account_key("Alice"),
+		oumuamua: Some(OumuamuaModuleConfig {
+		    admin: account_key("Alice"),
+                    token_id: 1,
 		}),
 	}
 }
