@@ -197,6 +197,8 @@ impl sudo::Trait for Runtime {
 impl oumuamua::Trait for Runtime {
     type Event = Event;
     type AssetId = u32;
+    type TokenBalance = u64;
+
 }
 
 

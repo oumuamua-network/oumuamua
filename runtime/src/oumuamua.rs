@@ -17,24 +17,24 @@ use runtime_primitives::traits::One;
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct BorrowOrder<Balance, AccountId, AssetId, Hash> {
+pub struct BorrowOrder<TokenBalance, AccountId, AssetId, Hash> {
     id: Hash,
     owner: AccountId,
-    btotal: Balance,    // 借款总额
+    btotal: TokenBalance,    // 借款总额
     btoken_id: AssetId, // 借款币种
-    already: Balance,   // 已经借到
+    already: TokenBalance,   // 已经借到
     duration: u64,      // 借款时长
-    stotal: Balance,    // 抵押总额
+    stotal: TokenBalance,    // 抵押总额
     stoken_id: AssetId, // 抵押币种
     interest: u32,      // 年利率，万分之 x
 }
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct SupplyOrder<Balance, AccountId, AssetId, Hash> {
+pub struct SupplyOrder<TokenBalance, AccountId, AssetId, Hash> {
     id: Hash,
     owner: AccountId,
-    total: Balance,
+    total: TokenBalance,
     stoken: AssetId,      // 提供的资金种类（默认是 USDT）
     tokens: Vec<AssetId>, // 接受抵押的资金种类
     amortgage: u32,       // 接受抵押率，万分之 x
@@ -50,9 +50,17 @@ pub struct Erc20Token<U> {
     total_supply: U,
 }
 
-pub trait Trait: balances::Trait {
+pub trait Trait: system::Trait {
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
     type AssetId: Parameter + SimpleArithmetic + Default + Copy;
+    type TokenBalance: Parameter
+        + Member
+        + SimpleArithmetic
+        + Codec
+        + Default
+        + Copy
+        + As<usize>
+        + As<u64>;
 }
 
 
@@ -61,25 +69,25 @@ decl_event!(
     where
         <T as system::Trait>::AccountId,
         <T as system::Trait>::Hash,
-        <T as balances::Trait>::Balance,
+        <T as self::Trait>::TokenBalance,
         <T as self::Trait>::AssetId,
     {
-        CreateBorrow(AccountId, Balance,  u64, Balance, u32),
+        CreateBorrow(AccountId, TokenBalance,  u64, TokenBalance, u32),
         CancelBorrow(AccountId, Hash),
         TakeBorrow(AccountId),
         CreateSupply(AccountId),
         CancelSupply(AccountId, Hash),
         TakeSupply(AccountId),
 
-        Transfer(AssetId, AccountId, AccountId, Balance),
-        Approval(AssetId, AccountId, AccountId, Balance),
+        Transfer(AssetId, AccountId, AccountId, TokenBalance),
+        Approval(AssetId, AccountId, AccountId, TokenBalance),
 
     }
 );
 
 decl_storage! {
     trait Store for Module<T: Trait> as KittyStorage {
-        BorrowOrderDetail get(borrow_order_detail): map T::Hash => BorrowOrder<T::Balance, T::AccountId, T::AssetId, T::Hash>;
+        BorrowOrderDetail get(borrow_order_detail): map T::Hash => BorrowOrder<T::TokenBalance, T::AccountId, T::AssetId, T::Hash>;
         BorrowOrderOwner get(owner_of_borrow): map T::Hash => Option<T::AccountId>;
 
         AllBorrowOrder get(borrow_by_index): map u64 => T::Hash;
@@ -90,7 +98,7 @@ decl_storage! {
         OwnedBorrowCount get(owned_borrow_count): map T::AccountId => u64;
         OwnedBorrowIndex: map T::Hash => u64;
 
-        SupplyOrderDetail get(supply_order_detail): map T::Hash => SupplyOrder<T::Balance, T::AccountId, T::AssetId, T::Hash>;
+        SupplyOrderDetail get(supply_order_detail): map T::Hash => SupplyOrder<T::TokenBalance, T::AccountId, T::AssetId, T::Hash>;
         SupplyOrderOwner get(owner_of_supply): map T::Hash => Option<T::AccountId>;
 
         AllSupplyOrder get(supply_by_index): map u64 => T::Hash;
@@ -107,9 +115,9 @@ decl_storage! {
 
 
         TokenId get(token_id) config(): T::AssetId;
-        Tokens get(token_details): map T::AssetId => Erc20Token<T::Balance>;
-        BalanceOf get(balance_of): map (T::AssetId, T::AccountId) => T::Balance;
-        Allowance get(allowance): map (T::AssetId, T::AccountId, T::AccountId) => T::Balance;
+        Tokens get(token_details): map T::AssetId => Erc20Token<T::TokenBalance>;
+        BalanceOf get(balance_of): map (T::AssetId, T::AccountId) => T::TokenBalance;
+        Allowance get(allowance): map (T::AssetId, T::AccountId, T::AccountId) => T::TokenBalance;
 
         Admin get(admin) config(): T::AccountId;
     }
@@ -120,7 +128,7 @@ decl_module! {
 
         fn deposit_event<T>() = default;
 
-        fn init(origin, name: Vec<u8>, ticker: Vec<u8>, total_supply: T::Balance) -> Result {
+        fn init(origin, name: Vec<u8>, ticker: Vec<u8>, total_supply: T::TokenBalance) -> Result {
             let sender = ensure_signed(origin)?;
 
             ensure!(sender == Self::admin(), "only Admin can new a token");
@@ -146,12 +154,12 @@ decl_module! {
         }
 
 
-        fn transfer(_origin, token_id: T::AssetId, to: T::AccountId, value: T::Balance) -> Result {
+        fn transfer(_origin, token_id: T::AssetId, to: T::AccountId, value: T::TokenBalance) -> Result {
             let sender = ensure_signed(_origin)?;
             Self::_transfer(token_id, sender, to, value)
         }
 
-        fn approve(_origin, token_id: T::AssetId, spender: T::AccountId, value: T::Balance) -> Result {
+        fn approve(_origin, token_id: T::AssetId, spender: T::AccountId, value: T::TokenBalance) -> Result {
             let sender = ensure_signed(_origin)?;
             ensure!(<BalanceOf<T>>::exists((token_id, sender.clone())), "Account does not own this token");
 
@@ -167,7 +175,7 @@ decl_module! {
       // the ERC20 standard transfer_from function
       // implemented in the open-zeppelin way - increase/decrease allownace
       // if approved, transfer from an account to another account without owner's signature
-        pub fn transfer_from(_origin, token_id: T::AssetId, from: T::AccountId, to: T::AccountId, value: T::Balance) -> Result {
+        pub fn transfer_from(_origin, token_id: T::AssetId, from: T::AccountId, to: T::AccountId, value: T::TokenBalance) -> Result {
             ensure!(<Allowance<T>>::exists((token_id, from.clone(), to.clone())), "Allowance does not exist.");
             let allowance = Self::allowance((token_id, from.clone(), to.clone()));
             ensure!(allowance >= value, "Not enough allowance.");
@@ -180,7 +188,7 @@ decl_module! {
             Self::_transfer(token_id, from, to, value)
         }
 
-        fn create_borrow(origin, btotal: T::Balance, btokenid: T::AssetId, duration: u64, stotal: T::Balance,
+        fn create_borrow(origin, btotal: T::TokenBalance, btokenid: T::AssetId, duration: u64, stotal: T::TokenBalance,
                          stokenid: T::AssetId, interest: u32) -> Result {
             let sender = ensure_signed(origin)?;
 
@@ -209,7 +217,7 @@ impl<T: Trait> Module<T> {
         token_id: T::AssetId,
         from: T::AccountId,
         to: T::AccountId,
-        value: T::Balance,
+        value: T::TokenBalance,
     ) -> Result {
         ensure!(
             <BalanceOf<T>>::exists((token_id, from.clone())),
