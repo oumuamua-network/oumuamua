@@ -254,7 +254,7 @@ decl_module! {
                 duration: duration,
                 stotal: stotal,
                 stoken_id: stokenid,
-                interest: interest
+                interest: interest,
             };
 
             let owned_borrow_count = Self::owned_borrow_count(&sender);
@@ -269,7 +269,7 @@ decl_module! {
             <BorrowOrderOwner<T>>::insert(random_hash, &sender);
 
             <AllBorrowOrder<T>>::insert(all_borrow_order_count, random_hash);
-           // <AllBorrowOrderCount<T>>::insert(new_all_borrow_order_count);
+            <AllBorrowOrderCount<T>>::put(new_all_borrow_order_count);
             <AllBorrowOrderIndex<T>>::insert(random_hash, all_borrow_order_count);
 
             <OwnedBorrowOrder<T>>::insert((sender.clone(), owned_borrow_count), random_hash);
@@ -280,7 +280,7 @@ decl_module! {
             <Nonce<T>>::mutate(|n| *n += 1);
 
             Self::deposit_event(RawEvent::CreateBorrow(sender, btotal, duration, stotal, interest));
-            
+
             Ok(())
         }
 
@@ -291,6 +291,74 @@ decl_module! {
             Ok(())
 
         }
+
+        fn take_borrow(origin) -> Result {
+
+            Ok(())
+        }
+
+
+        fn create_Supply(origin, stotal: T::TokenBalance, stokenid: T::AssetId, btokenids: Vec<T::AssetId>, amortgage: u32,
+                           duration: u64, interest: u32) -> Result {
+            let sender = ensure_signed(origin)?;
+
+            ensure!(
+                <BalanceOf<T>>::exists((stokenid, sender.clone())),
+                "Account does not own this token"
+            );
+
+            for i in btokenids.clone() {
+                ensure!(<Tokens<T>>::exists(i), "the btoken does not exist");
+
+            }
+
+
+            let nonce = <Nonce<T>>::get();
+            let random_hash = (<system::Module<T>>::random_seed(), &sender, nonce)
+                .using_encoded(<T as system::Trait>::Hashing::hash);
+
+            Self::_reserve(stokenid, sender.clone(), stotal);
+
+            ensure!(!<SupplyOrderOwner<T>>::exists(random_hash), "Supply order already exists");
+
+            let new_supply_order = SupplyOrder {
+                id: random_hash,
+                owner: sender.clone(),
+                total: stotal,
+                stoken: stokenid,
+                tokens: btokenids,
+                amortgage: amortgage,
+                duration: duration,
+                interest: interest,
+            };
+
+            let owned_supply_count = Self::owned_supply_count(&sender);
+            let new_owned_supply_count = owned_supply_count.checked_add(1)
+                .ok_or("Overflow add a new supply order to acount")?;
+
+            let all_supply_order_count = Self::supply_order_count();
+            let new_all_supply_order_count = all_supply_order_count.checked_add(1)
+                .ok_or("Overflow adding a new supply order")?;
+
+            <SupplyOrderDetail<T>>::insert(random_hash, new_supply_order);
+            <SupplyOrderOwner<T>>::insert(random_hash, &sender);
+
+            <AllSupplyOrder<T>>::insert(all_supply_order_count, random_hash);
+            <AllSupplyOrderCount<T>>::put(new_all_supply_order_count);
+            <AllSupplyOrderIndex<T>>::insert(random_hash, all_supply_order_count);
+
+            <OwnedSupplyOrder<T>>::insert((sender.clone(), owned_supply_count), random_hash);
+            <OwnedSupplyCount<T>>::insert(&sender, new_owned_supply_count);
+            <OwnedSupplyIndex<T>>::insert(random_hash, owned_supply_count);
+
+
+            <Nonce<T>>::mutate(|n| *n += 1);
+
+            Self::deposit_event(RawEvent::CreateSupply(sender));
+
+            Ok(())
+        }
+
 
 
 
