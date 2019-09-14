@@ -114,7 +114,7 @@ decl_storage! {
         OwnedSupplyCount get(owned_supply_count): map T::AccountId => u64;
         OwnedSupplyIndex: map T::Hash => u64;
 
-        AllowAssets get(allow_asset): Vec<T::AssetId>;
+        AllowAssets get(allow_asset): map(T::AssetId) => bool;
 
         Nonce: u64;
 
@@ -259,9 +259,9 @@ decl_module! {
             Ok(())
         }
 
-      // the ERC20 standard transfer_from function
-      // implemented in the open-zeppelin way - increase/decrease allownace
-      // if approved, transfer from an account to another account without owner's signature
+        // the ERC20 standard transfer_from function
+        // implemented in the open-zeppelin way - increase/decrease allownace
+        // if approved, transfer from an account to another account without owner's signature
         pub fn transfer_from(_origin, token_id: T::AssetId, from: T::AccountId, to: T::AccountId, value: T::TokenBalance) -> Result {
             ensure!(<Allowance<T>>::exists((token_id, from.clone(), to.clone())), "Allowance does not exist.");
             let allowance = Self::allowance((token_id, from.clone(), to.clone()));
@@ -273,6 +273,18 @@ decl_module! {
 
             Self::deposit_event(RawEvent::Approval(token_id, from.clone(), to.clone(), value));
             Self::_transfer(token_id, from, to, value)
+        }
+
+        fn set_allow_assets(origin, token_id: T::AssetId, add_or_del: bool) -> Result {
+            let sender = ensure_signed(origin)?;
+
+            ensure!(sender == Self::admin(), "only Admin can set allow assets");
+
+            ensure!(<Tokens<T>>::exists(token_id), "the token does not exist");
+
+            <AllowAssets<T>>::insert(token_id, add_or_del);
+
+            Ok(())
         }
 
 
@@ -289,6 +301,10 @@ decl_module! {
 
             ensure!(<TokenPrice<T>>::exists(btokenid), "the btoken price does not exist");
             ensure!(<TokenPrice<T>>::exists(stokenid), "the stoken price does not exist");
+
+            ensure!(Self::allow_asset(btokenid) == true, "the borrowed asset is not allowed");
+            ensure!(Self::allow_asset(stokenid) == true, "the supply asset is not allowed");
+
 
             let bprice = Self::token_price(btokenid);
             // todo: need checked_mul
@@ -370,9 +386,12 @@ decl_module! {
                 "Account does not own this token"
             );
 
+            ensure!(Self::allow_asset(stokenid) == true, "the supply asset is not allowed");
+
             for i in btokenids.clone() {
                 ensure!(<Tokens<T>>::exists(i), "the btoken does not exist");
 
+                ensure!(Self::allow_asset(i) == true, "the btokenid asset is not allowed");
             }
 
 
@@ -421,6 +440,8 @@ decl_module! {
 
             Ok(())
         }
+
+
 
 
 
