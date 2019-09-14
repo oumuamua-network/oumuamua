@@ -25,7 +25,7 @@ pub struct BorrowOrder<TokenBalance, AccountId, AssetId, Hash> {
     btoken_id: AssetId,    // 借款币种
     already: TokenBalance, // 已经借到
     duration: u64,         // 借款时长
-    stotal: TokenBalance,  // 抵押总额
+    stotal: TokenBalance,  // 抵押总额，为 0 时，表示它是 已完成/已取消 状态。
     stoken_id: AssetId,    // 抵押币种
     interest: u32,         // 年利率，万分之 x
 }
@@ -35,7 +35,7 @@ pub struct BorrowOrder<TokenBalance, AccountId, AssetId, Hash> {
 pub struct SupplyOrder<TokenBalance, AccountId, AssetId, Hash> {
     id: Hash,
     owner: AccountId,
-    total: TokenBalance,
+    total: TokenBalance,  // 提供资金，为 0 时表示 它是 已完成/已取消 状态。
     stoken: AssetId,      // 提供的资金种类（默认是 USDT）
     tokens: Vec<AssetId>, // 接受抵押的资金种类
     amortgage: u32,       // 接受抵押率，万分之 x
@@ -305,6 +305,8 @@ decl_module! {
             ensure!(Self::allow_asset(btokenid) == true, "the borrowed asset is not allowed");
             ensure!(Self::allow_asset(stokenid) == true, "the supply asset is not allowed");
 
+            ensure!(stotal > T::TokenBalance::from(0u64), "stotal should bigger than 0");
+
 
             let bprice = Self::token_price(btokenid);
             // todo: need checked_mul
@@ -364,11 +366,31 @@ decl_module! {
         }
 
 
-        fn cancel_borrow(orderid: T::Hash) ->Result {
+        fn cancel_borrow(origin, orderid: T::Hash) -> Result {
+            let sender = ensure_signed(origin)?;
 
+            ensure!(<BorrowOrderDetail<T>>::exists(orderid), "the borrow order does not exist");
+
+            let owner = Self::owner_of_borrow(orderid).unwrap();
+
+            let mut order = Self::borrow_order_detail(orderid);
+
+            ensure!(owner == sender, "only owner can cancel order");
+            ensure!(order.already == T::TokenBalance::from(0u64), "the borrow order already begin");
+            ensure!(order.stotal > T::TokenBalance::from(0u64), "the borrow order is invalid");
+
+            let stoken_id = order.stoken_id;
+            let svalue = order.stotal;
+
+            Self::_unreserve(stoken_id, sender.clone(), svalue);
+
+            order.stotal = T::TokenBalance::from(0u64);
+
+            <BorrowOrderDetail<T>>::insert(orderid, order);
+
+            Self::deposit_event(RawEvent::CancelBorrow(sender, orderid));
 
             Ok(())
-
         }
 
         fn take_borrow(origin) -> Result {
@@ -385,6 +407,8 @@ decl_module! {
                 <BalanceOf<T>>::exists((stokenid, sender.clone())),
                 "Account does not own this token"
             );
+
+            ensure!(stotal > T::TokenBalance::from(0u64), "stotal should bigger than 0");
 
             ensure!(Self::allow_asset(stokenid) == true, "the supply asset is not allowed");
 
@@ -441,6 +465,31 @@ decl_module! {
             Ok(())
         }
 
+        fn cance_supply(origin, orderid: T::Hash) -> Result {
+            let sender = ensure_signed(origin)?;
+
+            ensure!(<SupplyOrderDetail<T>>::exists(orderid), "the supply order does not exist");
+
+            let owner = Self::owner_of_supply(orderid).unwrap();
+
+            let mut order = Self::supply_order_detail(orderid);
+
+            ensure!(owner == sender, "only owner can cancel order");
+            ensure!(order.total > T::TokenBalance::from(0u64), "the borrow order is invalid");
+
+            let stoken_id = order.stoken;
+            let svalue = order.total;
+
+            Self::_unreserve(stoken_id, sender.clone(), svalue);
+
+            order.total = T::TokenBalance::from(0u64);
+
+            <SupplyOrderDetail<T>>::insert(orderid, order);
+
+            Self::deposit_event(RawEvent::CancelSupply(sender, orderid));
+
+            Ok(())
+        }
 
 
 
