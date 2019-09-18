@@ -38,10 +38,11 @@ pub struct SupplyOrder<TokenBalance, AccountId, AssetId, Hash> {
     total: TokenBalance,  // 提供资金，为 0 时表示 它是 已完成/已取消 状态。
     stoken: AssetId,      // 提供的资金种类（默认是 USDT）
     tokens: Vec<AssetId>, // 接受抵押的资金种类
-    amortgage: u32,       // 接受抵押率，万分之 x
+    amortgage: u32,       // 接受抵押率，万分之 x 借款方能拿到的钱/借款方抵押的钱
     duration: u64,        // 这部分资金的 free time
     interest: u32,        // 接受最小的年利率，万分之 x
 }
+
 
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
 pub struct Erc20Token<U> {
@@ -465,6 +466,7 @@ decl_module! {
             Ok(())
         }
 
+
         fn cance_supply(origin, orderid: T::Hash) -> Result {
             let sender = ensure_signed(origin)?;
 
@@ -492,6 +494,45 @@ decl_module! {
         }
 
 
+        fn take_supply(origin, sorderid: T::Hash, btokenid: T::AssetId) -> Result {
+            let sender = ensure_signed(origin)?;
+
+            ensure!(<SupplyOrderDetail<T>>::exists(sorderid), "the supply order does not exist");
+            ensure!(<Tokens<T>>::exists(btokenid), "the btoken does not exist");
+            ensure!(Self::allow_asset(btokenid) == true, "the borrowed asset is not allowed");
+
+
+            let mut sorder = Self::supply_order_detail(sorderid);
+
+            ensure!(sorder.clone().tokens.contains(&btokenid), "the supply order does not support this token");
+
+            let stokenid = sorder.stoken;
+            let stotal = sorder.total;
+            let sowner = sorder.owner;
+
+
+            let sprice = Self::token_price(stokenid);
+            // todo: need checked_mul
+            let stotalprice = stotal * T::TokenBalance::from(sprice);
+            let bprice = Self::token_price(btokenid);
+
+            // todo: need checked_div
+            let btotalprice = stotalprice * T::TokenBalance::from(10000u64) / T::TokenBalance::from(u64::from(sorder.amortgage));
+            let btotal = btotalprice / T::TokenBalance::from(bprice);
+
+           Self::_reserve(btokenid, sender.clone(), btotal);
+
+            Self::_transfer(stokenid, sowner.clone(), sender.clone(), stotal);
+
+            Self::_unreserve(stokenid, sowner.clone(), stotal);
+
+            
+
+            Self::deposit_event(RawEvent::TakeSupply(sender));
+
+            Ok(())
+
+        }
 
 
 
