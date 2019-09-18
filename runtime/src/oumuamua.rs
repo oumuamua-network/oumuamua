@@ -502,7 +502,7 @@ decl_module! {
             ensure!(Self::allow_asset(btokenid) == true, "the borrowed asset is not allowed");
 
 
-            let mut sorder = Self::supply_order_detail(sorderid);
+            let  sorder = Self::supply_order_detail(sorderid);
 
             ensure!(sorder.clone().tokens.contains(&btokenid), "the supply order does not support this token");
 
@@ -520,15 +520,19 @@ decl_module! {
             let btotalprice = stotalprice * T::TokenBalance::from(10000u64) / T::TokenBalance::from(u64::from(sorder.amortgage));
             let btotal = btotalprice / T::TokenBalance::from(bprice);
 
-           Self::_reserve(btokenid, sender.clone(), btotal);
+            Self::_reserve(btokenid, sender.clone(), btotal);
 
             Self::_transfer(stokenid, sowner.clone(), sender.clone(), stotal);
 
             Self::_unreserve(stokenid, sowner.clone(), stotal);
 
-            
-
             Self::deposit_event(RawEvent::TakeSupply(sender));
+
+            let mut ssorder = Self::supply_order_detail(sorderid);
+            ssorder.total = T::TokenBalance::from(0u64);
+
+            <SupplyOrderDetail<T>>::insert(sorderid, ssorder);
+
 
             Ok(())
 
