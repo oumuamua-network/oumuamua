@@ -28,6 +28,7 @@ pub struct BorrowOrder<TokenBalance, AccountId, AssetId, Hash> {
     stotal: TokenBalance,  // 抵押总额，为 0 时，表示它是 已完成/已取消 状态。
     stoken_id: AssetId,    // 抵押币种
     interest: u32,         // 年利率，万分之 x
+
 }
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
@@ -42,6 +43,17 @@ pub struct SupplyOrder<TokenBalance, AccountId, AssetId, Hash> {
     duration: u64,        // 这部分资金的 free time
     interest: u32,        // 接受最小的年利率，万分之 x
 }
+
+/*
+#[derive(Encode, Decode, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct IngOrder<Hash> {
+    id: Hash, 
+    type: u64, 
+    originid: Hash,
+}
+*/
+
 
 
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
@@ -79,6 +91,9 @@ decl_event!(
         CreateSupply(AccountId),
         CancelSupply(AccountId, Hash),
         TakeSupply(AccountId),
+
+        FinishBorrow(AccountId),
+        FinishSupply(AccountId),
 
         Transfer(AssetId, AccountId, AccountId, TokenBalance),
         Approval(AssetId, AccountId, AccountId, TokenBalance),
@@ -394,7 +409,31 @@ decl_module! {
             Ok(())
         }
 
-        fn take_borrow(origin) -> Result {
+        fn take_borrow(origin, borderid: T::Hash) -> Result {
+            let sender = ensure_signed(origin)?;
+
+            ensure!(<BorrowOrderDetail<T>>::exists(borderid), "the supply order does not exist");
+            
+            let  border = Self::borrow_order_detail(borderid);
+            ensure!(border.stotal > T::TokenBalance::from(0u64), "the borrow order is invalid or finished");
+            let bowner = border.owner;
+            let btotal = border.btotal;
+            let btokenid = border.btoken_id;
+            let stotal = border.stotal;
+            let stokenid = border.stoken_id;
+
+
+
+
+            Self::_transfer(btokenid, sender.clone(), bowner.clone(), btotal);
+
+
+            Self::deposit_event(RawEvent::TakeBorrow(sender));
+
+            let mut bborder = Self::borrow_order_detail(borderid);
+            bborder.stotal = T::TokenBalance::from(0u64);
+
+            <BorrowOrderDetail<T>>::insert(borderid, bborder);
 
             Ok(())
         }
@@ -505,7 +544,7 @@ decl_module! {
             let  sorder = Self::supply_order_detail(sorderid);
 
             ensure!(sorder.clone().tokens.contains(&btokenid), "the supply order does not support this token");
-
+            ensure!(sorder.clone().total > T::TokenBalance::from(0u64), "the supply order is valid or finished." );
             let stokenid = sorder.stoken;
             let stotal = sorder.total;
             let sowner = sorder.owner;
@@ -537,9 +576,6 @@ decl_module! {
             Ok(())
 
         }
-
-
-
     }
 }
 
