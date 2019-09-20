@@ -1,28 +1,25 @@
 use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
 use system::ensure_signed;
+use parity_codec::{Codec, Decode, Encode};
+use runtime_primitives::traits::{
+    As, CheckedAdd, Member, SimpleArithmetic,
+};
 
-pub trait Trait: system::Trait {
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-    type TokenBalance: Parameter
-        + Member
-        + SimpleArithmetic
-        + Codec
-        + Default
-        + Copy
-        + As<usize>
-        + As<u64>
-        + From<u64>;
-}
+use crate::asset;
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct AccountSt<AccountId, TokenBalance> {
     id: AccountId,
     illegal_times: u32,       // 违约次数
-    legal_time: u32,         // 守约次数
+    legal_times: u32,         // 守约次数
     illegal_total: TokenBalance, // 总违约金额
     legal_total: TokenBalance,   // 总守约金额
 }
+
+pub trait Trait: system::Trait {
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+}
+
 
 decl_storage! {
 	trait Store for Module<T: Trait> as SubstrateModuleTemplate {
@@ -83,7 +80,37 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-    pub fn add_illegal(accountid: T::AccountId, value: T::TokenBalance) -> Result{
-        ensure!()
+    pub fn add_illegal(accountid: T::AccountId, value: T::TokenBalance) -> Result {
+        ensure!(<AccountDetail<T>>::exists(accountid), "the Account don't exists");
+
+        let mut _accountst = Self::account_detail(accountid);
+        _accountst.illegal_times = _accountst.illegal_times.checked_add(1u32)
+            .ok_or("overflow in calculating illegal_times")?;
+
+        _accountst.illegal_total = _accountst.illegal_total.checked_add(value)
+            .ok_or("overflow in calculating illegal_total")?;
+
+        <AccountDetail<T>>::insert(accountid, _accountst);
+
+        Self::deposit_event(RawEvent::IllegalHappen(accountid, value));
+
+        Ok(())
+    }
+
+    pub fn add_legal(accountid: T::AccountId, value: T::TokenBalance) -> Result {
+        ensure!(<AccountDetail<T>>::exists(accountid), "the Account don't exists");
+
+        let mut _accountst = Self::account_detail(accountid);
+        _accountst.legal_times = _accountst.legal_times.checked_add(1u32)
+            .ok_or("overflow in calculating legal_times")?;
+
+        _accountst.legal_total = _accountst.legal_total.checked_add(value)
+            .ok_or("overflow in calculating illegal_total")?;
+
+        <AccountDetail<T>>::insert(accountid, _accountst);
+
+        Self::deposit_event(RawEvent::IllegalHappen(accountid, value));
+
+        Ok(())
     }
 }
