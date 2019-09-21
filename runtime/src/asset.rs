@@ -3,6 +3,7 @@ use system::ensure_signed;
 use runtime_primitives::traits::{
     As, CheckedAdd, CheckedSub, Hash, Member, SimpleArithmetic,
 };
+use parity_codec::{Codec, Decode, Encode};
 
 
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
@@ -37,6 +38,7 @@ decl_storage! {
 
         Allowance get(allowance): map (T::AssetId, T::AccountId, T::AccountId) => T::TokenBalance;
 
+        Admin get(admin) config(): T::AccountId;
 	}
 }
 
@@ -136,7 +138,7 @@ decl_module! {
 
         fn transfer(_origin, token_id: T::AssetId, to: T::AccountId, value: T::TokenBalance) -> Result {
             let sender = ensure_signed(_origin)?;
-            Self::transfer(token_id, sender, to, value)
+            Self::_transfer(token_id, sender, to, value)
         }
 
         fn approve(_origin, token_id: T::AssetId, spender: T::AccountId, value: T::TokenBalance) -> Result {
@@ -187,7 +189,7 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-    pub fn transfer(
+    pub fn _transfer(
         token_id: T::AssetId,
         from: T::AccountId,
         to: T::AccountId,
@@ -236,7 +238,7 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    pub fn lock(token_id: T::AssetId, sender: T::AccountId, value: T::TokenBalance) -> Result {
+    pub fn _lock(token_id: T::AssetId, sender: T::AccountId, value: T::TokenBalance) -> Result {
         ensure!(
             <BalanceOf<T>>::exists((token_id, sender.clone())),
             "Account does not own this token"
@@ -262,7 +264,7 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    pub fn unlock(token_id: T::AssetId, sender: T::AccountId, value: T::TokenBalance) -> Result {
+    pub fn _unlock(token_id: T::AssetId, sender: T::AccountId, value: T::TokenBalance) -> Result {
         ensure!(
             <BalanceOf<T>>::exists((token_id, sender.clone())),
             "Account does not own this token"

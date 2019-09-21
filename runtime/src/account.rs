@@ -6,7 +6,6 @@ use runtime_primitives::traits::{
 };
 
 use crate::asset;
-use crate::order;
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 pub struct AccountSt<AccountId, TokenBalance> {
@@ -17,7 +16,7 @@ pub struct AccountSt<AccountId, TokenBalance> {
     legal_total: TokenBalance,   // 总守约金额
 }
 
-pub trait Trait: system::Trait {
+pub trait Trait: system::Trait + asset::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
@@ -25,13 +24,7 @@ pub trait Trait: system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as SubstrateModuleTemplate {
 		AccountDetail get(account_detail): map T::AccountId => Option<AccountSt>;
-        Admin get(admin) config(): T::AccountId;
-        OwnedOrder get(owned_order): map (T::AccountId, T::OrderType, u64) => T::Hash;
-        OwnedCount get(owned_count): map (T::AccountId, T::OrderType) => u64;
 
-        OrderTokenCount get(order_token_count): map (T::AccountId, T::OrderType) => u64;
-        OrderTokenKind get(order_token_kind): map (T::AccountId, T::OrderType, u64) => T::AssetId;
-        OrderTokenTotal get(order_token_total): map (T::AccountId, T::OrderType, T::AssetId) => T::TokenBalance;
 	}
 }
 

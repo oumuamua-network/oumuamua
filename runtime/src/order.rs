@@ -2,7 +2,7 @@ use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Res
 use system::ensure_signed;
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
-pub struct Order<TokenBalance, AccountId, AssetId, Hash, Status> {
+pub struct BorrowOrder<TokenBalance, AccountId, AssetId, Hash, Status> {
     id: Hash,
     owner: AccountId,
     btotal: TokenBalance,  // 借款总额
