@@ -1,5 +1,8 @@
-use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
+use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result, ensure, Parameter};
 use system::ensure_signed;
+use runtime_primitives::traits::{
+    As, CheckedAdd, CheckedSub, Hash, Member, SimpleArithmetic,
+};
 
 
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
